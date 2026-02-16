@@ -138,7 +138,7 @@ const Navbar = () => {
           </Button>
         </DrawerTrigger>
         <DrawerContent className='max-w-lg mx-auto'>
-          <ScrollArea className='h-[80vh] pb-6'>
+          <ScrollArea className='h-[80dvh] pb-6'>
             <DrawerHeader className='group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left'>
               <DrawerTitle>Demo Info</DrawerTitle>
               <DrawerDescription>
