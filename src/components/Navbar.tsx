@@ -4,7 +4,6 @@ import {
   Drawer,
   DrawerContent,
   DrawerDescription,
-  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
@@ -139,7 +138,7 @@ const Navbar = () => {
           </Button>
         </DrawerTrigger>
         <DrawerContent className='max-w-lg mx-auto'>
-          <ScrollArea className='h-[55vh]'>
+          <ScrollArea className='h-[80vh] pb-6'>
             <DrawerHeader className='group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left'>
               <DrawerTitle>Demo Info</DrawerTitle>
               <DrawerDescription>
@@ -150,12 +149,12 @@ const Navbar = () => {
               </DrawerDescription>
             </DrawerHeader>
             <div className='p-4'>
-              <h3 className='font-medium mb-1'>You</h3>
+              <h3 className='font-semibold mb-1'>You</h3>
               <h4 className='font-medium text-neutral-600'>Maria Martinez</h4>
               <p className='text-muted-foreground text-sm'>
                 Proud mom of Emma and Luca.
               </p>
-              <h3 className='font-medium mt-6 mb-1'>Your Children</h3>
+              <h3 className='font-semibold mt-6 mb-1'>Your Children</h3>
               <div className='space-y-12'>
                 {children.map(child => {
                   return (
@@ -207,49 +206,7 @@ const Navbar = () => {
                   );
                 })}
               </div>
-              {/* <ItemGroup className='gap-2'>
-                {children.map(child => (
-                  <Item key={child.name} variant='outline'>
-                    <ItemContent>
-                      <ItemTitle>{child.name}</ItemTitle>
-                      <ItemDescription>{child.description}</ItemDescription>
-
-                      <h4 className='mt-4 font-medium text-muted-foreground'>
-                        Daily Schedule
-                      </h4>
-                      <ul>
-                        {child.schedule.map((item, index) => (
-                          <li key={index} className='py-2 flex items-center'>
-                            <span className='text-pink-600 font-medium mr-4 ml-1'>
-                              {index + 1}
-                            </span>{' '}
-                            <div className='flex flex-col gap-1'>
-                              <div>
-                                <span className='font-medium'>
-                                  {item.title}
-                                </span>
-                                <span className='ml-1 text-xs text-muted-foreground '>
-                                  ({item.teacher})
-                                </span>
-                              </div>
-                              <span className='text-xs text-muted-foreground'>
-                                {item.timeframe}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </ItemContent>
-                  </Item>
-                ))}
-              </ItemGroup> */}
             </div>
-            <DrawerFooter>
-              {/* <Button>Submit</Button>
-              <DrawerClose>
-                <Button variant='outline'>Cancel</Button>
-              </DrawerClose> */}
-            </DrawerFooter>
           </ScrollArea>
         </DrawerContent>
       </Drawer>
