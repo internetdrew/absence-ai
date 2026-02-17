@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Card,
   CardContent,
@@ -8,17 +7,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+
 import Navbar from './components/Navbar';
 import { Button } from './components/ui/button';
-import { AudioLines, NotepadText, PhoneOff } from 'lucide-react';
-import { Textarea } from './components/ui/textarea';
+import { AudioLines, PhoneOff } from 'lucide-react';
+import { LiveWaveform } from '@/components/ui/live-waveform';
+import { Waveform } from './components/ui/waveform';
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -27,30 +21,52 @@ function App() {
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
   const localStream = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
+
   const [status, setStatus] = useState<ConnectionStatus>('idle');
-  const [messages, setMessages] = useState<
-    { role: 'user' | 'assistant'; content: string }[]
-  >([]);
+  const [waveformData, setWaveformData] = useState<number[]>(Array(60).fill(0));
 
   useEffect(() => {
     return () => {
       dataChannel.current?.close();
       peerConnection.current?.close();
       localStream.current?.getTracks().forEach(track => track.stop());
+      audioContextRef.current?.close();
       dataChannel.current = null;
       peerConnection.current = null;
       localStream.current = null;
+      audioContextRef.current = null;
     };
   }, []);
 
   const stopVoiceChat = () => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+
+    // Close audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
     dataChannel.current?.close();
     peerConnection.current?.close();
     localStream.current?.getTracks().forEach(track => track.stop());
     dataChannel.current = null;
     peerConnection.current = null;
     localStream.current = null;
+
     setStatus('disconnected');
+    setWaveformData(Array(60).fill(0));
   };
 
   const startVoiceChat = async () => {
@@ -83,9 +99,67 @@ function App() {
         audioElement.current.autoplay = true;
       }
       pc.ontrack = e => {
+        const remoteStream = e.streams[0];
+
         if (audioElement.current) {
-          audioElement.current.srcObject = e.streams[0];
+          audioElement.current.srcObject = remoteStream;
         }
+
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
+
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
+
+        const source = audioContext.createMediaStreamSource(remoteStream);
+        const analyser = audioContext.createAnalyser();
+
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.85;
+
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const BAR_COUNT = 60;
+
+        const update = () => {
+          analyser.getByteFrequencyData(dataArray);
+
+          const bars: number[] = [];
+
+          const chunkSize = Math.floor(bufferLength / (BAR_COUNT / 2));
+
+          for (let i = 0; i < BAR_COUNT / 2; i++) {
+            let sum = 0;
+
+            for (let j = 0; j < chunkSize; j++) {
+              sum += dataArray[i * chunkSize + j];
+            }
+
+            const average = sum / chunkSize;
+            const normalized = Math.min((average / 255) * 1.5, 1);
+
+            bars.push(normalized);
+          }
+
+          // Mirror it
+          const mirrored = [...bars.slice().reverse(), ...bars];
+
+          setWaveformData(mirrored);
+
+          animationRef.current = requestAnimationFrame(update);
+        };
+
+        update();
       };
 
       // Add local audio track for microphone input in the browser
@@ -99,35 +173,20 @@ function App() {
       const dc = pc.createDataChannel('oai-events');
       dataChannel.current = dc;
       dc.onerror = e => console.error('Data channel error:', e);
-      dc.onopen = () => setStatus('connected');
-      dc.onclose = () => setStatus('disconnected');
+      dc.onopen = () => {
+        setStatus('connected');
+      };
+      dc.onclose = () => {
+        setStatus('disconnected');
+      };
       dc.onmessage = e => {
         const serverEvent = JSON.parse(e.data);
 
-        // User's speech transcribed
-        if (
-          serverEvent.type ===
-          'conversation.item.input_audio_transcription.completed'
-        ) {
-          console.log(
-            'input transcription completed: ',
-            serverEvent.transcription,
-          );
-          setMessages(prev => [
-            ...prev,
-            { role: 'user', content: serverEvent.transcript },
-          ]);
-        }
-
         if (serverEvent.type === 'response.done') {
           console.log(serverEvent.response.output[0]);
-          setMessages(prev => [
-            ...prev,
-            {
-              role: 'assistant',
-              content: serverEvent.response.output[0].content[0].transcript,
-            },
-          ]);
+        }
+        if (serverEvent.type === 'response.output_audio.delta') {
+          console.log('delta hit: ', serverEvent);
         }
       };
 
@@ -155,8 +214,6 @@ function App() {
     }
   };
 
-  console.log('current messages: ', messages);
-
   return (
     <>
       <audio ref={audioElement} className='hidden' />
@@ -172,7 +229,7 @@ function App() {
         managing student absences.
       </p>
 
-      <div className='max-w-2xl mx-auto mt-12 mb-4 px-4'>
+      <div className='max-w-lg mx-auto mt-12 mb-4 px-4'>
         <Card>
           <CardHeader className='px-4'>
             <CardTitle>Report a Student Absence</CardTitle>
@@ -181,52 +238,20 @@ function App() {
             </CardDescription>
           </CardHeader>
           <CardContent className='px-4'>
-            <ScrollArea className='h-52'>
-              {messages.length > 0 ? (
-                <div className='flex flex-col gap-2 py-4'>
-                  {messages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm shadow-sm whitespace-pre-line wrap-break-words
-                        ${
-                          msg.role === 'user'
-                            ? 'self-end bg-[#007aff] text-white rounded-br-md mr-3'
-                            : 'self-start bg-[#e5e5ea] text-black rounded-bl-md'
-                        }
-                      `}
-                      style={{
-                        borderBottomRightRadius: msg.role === 'user' ? 8 : 24,
-                        borderBottomLeftRadius:
-                          msg.role === 'assistant' ? 8 : 24,
-                      }}
-                    >
-                      {msg.content}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant='icon' className='size-4'>
-                      <NotepadText />
-                    </EmptyMedia>
-                    <EmptyTitle className='text-base'>
-                      Log a new absence
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      Type a message or tap the voice button to tell us which
-                      student(s) will be absent, when, and why...
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              )}
-            </ScrollArea>
+            <LiveWaveform
+              active={status === 'connected'}
+              mode='static'
+              fadeEdges
+            />
+            <Waveform
+              data={waveformData}
+              height={100}
+              barWidth={3}
+              barGap={2}
+              fadeEdges
+            />
           </CardContent>
           <CardFooter className='flex flex-col gap-4 px-4'>
-            <Textarea
-              placeholder='Enter absence details here...'
-              className='field-sizing-content resize-none'
-            />
             <div className='ml-auto flex gap-2'>
               {status === 'connected' ? (
                 <Button
