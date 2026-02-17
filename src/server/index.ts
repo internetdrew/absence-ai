@@ -2,10 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
+import { CHILDREN } from '../constants';
 
 dotenv.config({ path: '.env.local' });
 
 const openaiApiKey = process.env.OPENAI_API_KEY;
+
 if (!openaiApiKey) {
   console.error('OPENAI_API_KEY is not set in environment variables.');
   process.exit(1);
@@ -21,7 +23,7 @@ app.use(express.text({ type: ['application/sdp', 'text/plain'] }));
 
 const sessionConfig = JSON.stringify({
   type: 'realtime',
-  model: 'gpt-realtime',
+  model: 'gpt-realtime-mini',
   output_modalities: ['audio'],
   audio: {
     input: {
@@ -40,8 +42,12 @@ const sessionConfig = JSON.stringify({
       voice: 'marin',
     },
   },
-  instructions:
-    'You are a helpful assistant for a school absence reporting system. Help parents report student absences. Be brief and conversational.',
+  instructions: `You are a helpful assistant for a school absence reporting system. Help parents report student absences. Be brief and conversational.
+
+The parent has the following students enrolled:
+${JSON.stringify(CHILDREN, null, 2)}
+
+When reporting an absence, confirm the student name, date(s), and reason. If they mention a class or period, reference the schedule above.`,
 });
 
 // An endpoint which creates a Realtime API session.
