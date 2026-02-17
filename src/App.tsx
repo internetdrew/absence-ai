@@ -172,7 +172,7 @@ function App() {
         managing student absences.
       </p>
 
-      <div className='max-w-xl mx-auto mt-12 mb-4 px-4'>
+      <div className='max-w-2xl mx-auto mt-12 mb-4 px-4'>
         <Card>
           <CardHeader className='px-4'>
             <CardTitle>Report a Student Absence</CardTitle>
@@ -182,20 +182,44 @@ function App() {
           </CardHeader>
           <CardContent className='px-4'>
             <ScrollArea className='h-52'>
-              <Empty>
-                <EmptyHeader>
-                  <EmptyMedia variant='icon' className='size-4'>
-                    <NotepadText />
-                  </EmptyMedia>
-                  <EmptyTitle className='text-base'>
-                    Log a new absence
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    Type a message or tap the voice button to tell us which
-                    student(s) will be absent, when, and why...
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+              {messages.length > 0 ? (
+                <div className='flex flex-col gap-2 py-4'>
+                  {messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm shadow-sm whitespace-pre-line wrap-break-words
+                        ${
+                          msg.role === 'user'
+                            ? 'self-end bg-[#007aff] text-white rounded-br-md mr-3'
+                            : 'self-start bg-[#e5e5ea] text-black rounded-bl-md'
+                        }
+                      `}
+                      style={{
+                        borderBottomRightRadius: msg.role === 'user' ? 8 : 24,
+                        borderBottomLeftRadius:
+                          msg.role === 'assistant' ? 8 : 24,
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant='icon' className='size-4'>
+                      <NotepadText />
+                    </EmptyMedia>
+                    <EmptyTitle className='text-base'>
+                      Log a new absence
+                    </EmptyTitle>
+                    <EmptyDescription>
+                      Type a message or tap the voice button to tell us which
+                      student(s) will be absent, when, and why...
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
             </ScrollArea>
           </CardContent>
           <CardFooter className='flex flex-col gap-4 px-4'>
