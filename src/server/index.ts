@@ -31,9 +31,6 @@ const sessionConfig = JSON.stringify({
         type: 'audio/pcm',
         rate: 24000,
       },
-      transcription: {
-        model: 'gpt-4o-mini-transcribe',
-      },
       noise_reduction: {
         type: 'near_field',
       },
@@ -48,7 +45,6 @@ const sessionConfig = JSON.stringify({
       voice: 'marin',
     },
   },
-  include: ['item.input_audio_transcription.logprobs'],
   instructions: `You are a helpful assistant for a school absence reporting system. Help parents report student absences. Be brief and conversational.
 
 The parent has the following students enrolled:
