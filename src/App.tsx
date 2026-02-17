@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -6,21 +7,216 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+
 import Navbar from './components/Navbar';
 import { Button } from './components/ui/button';
-import { AudioLines, NotepadText, PhoneOff, Send } from 'lucide-react';
-import { Textarea } from './components/ui/textarea';
+import { AudioLines, PhoneOff } from 'lucide-react';
+import { LiveWaveform } from '@/components/ui/live-waveform';
+import { Waveform } from './components/ui/waveform';
+
+type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
 function App() {
+  const audioElement = useRef<HTMLAudioElement | null>(null);
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const dataChannel = useRef<RTCDataChannel | null>(null);
+  const localStream = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
+
+  const [status, setStatus] = useState<ConnectionStatus>('idle');
+  const [waveformData, setWaveformData] = useState<number[]>(Array(60).fill(0));
+
+  useEffect(() => {
+    return () => {
+      dataChannel.current?.close();
+      peerConnection.current?.close();
+      localStream.current?.getTracks().forEach(track => track.stop());
+      audioContextRef.current?.close();
+      dataChannel.current = null;
+      peerConnection.current = null;
+      localStream.current = null;
+      audioContextRef.current = null;
+    };
+  }, []);
+
+  const stopVoiceChat = () => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
+
+    // Close audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    dataChannel.current?.close();
+    peerConnection.current?.close();
+    localStream.current?.getTracks().forEach(track => track.stop());
+    dataChannel.current = null;
+    peerConnection.current = null;
+    localStream.current = null;
+
+    setStatus('disconnected');
+    setWaveformData(Array(60).fill(0));
+  };
+
+  const startVoiceChat = async () => {
+    try {
+      if (peerConnection.current) {
+        return;
+      }
+
+      setStatus('connecting');
+
+      // Create a peer connection
+      const pc = new RTCPeerConnection();
+      peerConnection.current = pc;
+
+      pc.onconnectionstatechange = () => {
+        switch (pc.connectionState) {
+          case 'connected':
+            setStatus('connected');
+            break;
+          case 'disconnected':
+          case 'failed':
+          case 'closed':
+            setStatus('disconnected');
+            break;
+        }
+      };
+
+      // Set up to play remote audio from the model
+      if (audioElement.current) {
+        audioElement.current.autoplay = true;
+      }
+      pc.ontrack = e => {
+        const remoteStream = e.streams[0];
+
+        if (audioElement.current) {
+          audioElement.current.srcObject = remoteStream;
+        }
+
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
+
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
+
+        const source = audioContext.createMediaStreamSource(remoteStream);
+        const analyser = audioContext.createAnalyser();
+
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.85;
+
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const BAR_COUNT = 60;
+
+        const update = () => {
+          analyser.getByteFrequencyData(dataArray);
+
+          const bars: number[] = [];
+
+          const chunkSize = Math.floor(bufferLength / (BAR_COUNT / 2));
+
+          for (let i = 0; i < BAR_COUNT / 2; i++) {
+            let sum = 0;
+
+            for (let j = 0; j < chunkSize; j++) {
+              sum += dataArray[i * chunkSize + j];
+            }
+
+            const average = sum / chunkSize;
+            const normalized = Math.min((average / 255) * 1.5, 1);
+
+            bars.push(normalized);
+          }
+
+          // Mirror it
+          const mirrored = [...bars.slice().reverse(), ...bars];
+
+          setWaveformData(mirrored);
+
+          animationRef.current = requestAnimationFrame(update);
+        };
+
+        update();
+      };
+
+      // Add local audio track for microphone input in the browser
+      const ms = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      localStream.current = ms;
+      pc.addTrack(ms.getTracks()[0]);
+
+      // Set up data channel for sending and receiving events
+      const dc = pc.createDataChannel('oai-events');
+      dataChannel.current = dc;
+      dc.onerror = e => console.error('Data channel error:', e);
+      dc.onopen = () => {
+        setStatus('connected');
+      };
+      dc.onclose = () => {
+        setStatus('disconnected');
+      };
+      dc.onmessage = e => {
+        const serverEvent = JSON.parse(e.data);
+
+        if (serverEvent.type === 'response.done') {
+          console.log(serverEvent.response.output[0]);
+        }
+        if (serverEvent.type === 'response.output_audio.delta') {
+          console.log('delta hit: ', serverEvent);
+        }
+      };
+
+      // Start the session using the Session Description Protocol (SDP)
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const sdpResponse = await fetch('/session', {
+        method: 'POST',
+        body: offer.sdp,
+        headers: {
+          'Content-Type': 'application/sdp',
+        },
+      });
+
+      const answer = {
+        type: 'answer' as RTCSdpType,
+        sdp: await sdpResponse.text(),
+      };
+      await pc.setRemoteDescription(answer);
+    } catch (error) {
+      console.error('Error starting voice chat:', error);
+      stopVoiceChat();
+      return;
+    }
+  };
+
   return (
     <>
+      <audio ref={audioElement} className='hidden' />
       <Navbar />
       <span className='mx-auto text-sm mt-4 text-center block font-medium'>
         An AI-Powered Demo
@@ -33,7 +229,7 @@ function App() {
         managing student absences.
       </p>
 
-      <div className='max-w-xl mx-auto mt-12 mb-4 px-4'>
+      <div className='max-w-lg mx-auto mt-12 mb-4 px-4'>
         <Card>
           <CardHeader className='px-4'>
             <CardTitle>Report a Student Absence</CardTitle>
@@ -41,40 +237,45 @@ function App() {
               Give us the details and we'll take care of the rest.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant='icon' className='size-4'>
-                  <NotepadText />
-                </EmptyMedia>
-                <EmptyTitle className='text-base'>Log a new absence</EmptyTitle>
-                <EmptyDescription>
-                  Type a message or tap the voice button to tell us which
-                  student(s) will be absent, when, and why...
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+          <CardContent className='px-4'>
+            <LiveWaveform
+              active={status === 'connected'}
+              mode='static'
+              fadeEdges
+            />
+            <Waveform
+              data={waveformData}
+              height={100}
+              barWidth={3}
+              barGap={2}
+              fadeEdges
+            />
           </CardContent>
           <CardFooter className='flex flex-col gap-4 px-4'>
-            <Textarea
-              placeholder='Enter absence details here...'
-              className='field-sizing-content resize-none'
-            />
-            <div className='ml-auto'>
-              {/* <Button
-                size={'icon'}
-                variant='ghost'
-                className='rounded-full active:scale-90 transition-transform'
+            <div className='ml-auto flex gap-2'>
+              {status === 'connected' ? (
+                <Button
+                  size={'sm'}
+                  variant='destructive'
+                  className='active:scale-95 transition-transform'
+                  onClick={stopVoiceChat}
                 >
-                <Send />
-                </Button> */}
-              <Button
-                size={'sm'}
-                className='active:scale-95 transition-transform'
-              >
-                <AudioLines />
-                Start voice chat
-              </Button>
+                  <PhoneOff />
+                  End call
+                </Button>
+              ) : (
+                <Button
+                  size={'sm'}
+                  className='active:scale-95 transition-transform'
+                  onClick={startVoiceChat}
+                  disabled={status === 'connecting'}
+                >
+                  <AudioLines />
+                  {status === 'connecting'
+                    ? 'Connecting...'
+                    : 'Start voice chat'}
+                </Button>
+              )}
             </div>
           </CardFooter>
         </Card>
