@@ -13,17 +13,7 @@ This repo is a small demo UI for a school absence reporting flow. It is a Vite +
 
 ## Realtime and WebRTC guidance
 
-Preferred path: WebRTC via the unified interface.
-
-- Browser creates SDP offer and POSTs to our server endpoint (/session).
-- Server combines SDP with session config and calls https://api.openai.com/v1/realtime/calls using OPENAI_API_KEY.
-- Server returns the SDP answer to the browser.
-- Use WebRTC data channel for events.
-
-If using ephemeral keys:
-
-- Server creates a client secret via https://api.openai.com/v1/realtime/client_secrets.
-- Browser uses the ephemeral key to POST SDP to https://api.openai.com/v1/realtime/calls.
+Always use the OpenAI developer documentation MCP server if you need to work with the OpenAI API, ChatGPT Apps SDK, Codex,… without me having to explicitly ask.
 
 ## Security rules
 
