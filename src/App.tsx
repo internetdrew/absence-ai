@@ -277,7 +277,7 @@ function App() {
                     micMuted
                       ? ['#e7000b', '']
                       : llmIsSpeaking
-                        ? ['#e60076', '']
+                        ? ['#155dfc', '']
                         : ['#4ade80', '']
                   }
                 />
