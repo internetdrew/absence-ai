@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import Navbar from './components/Navbar';
 import { Button } from './components/ui/button';
-import { AudioLines, PhoneOff } from 'lucide-react';
-import { LiveWaveform } from '@/components/ui/live-waveform';
-import { Waveform } from './components/ui/waveform';
+import { AudioLines, Mic, MicOff, PhoneOff } from 'lucide-react';
+import { Orb } from '@/components/ui/orb';
+import { CHILDREN } from './constants';
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -20,23 +20,40 @@ function App() {
   const audioElement = useRef<HTMLAudioElement | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
-  const localStream = useRef<MediaStream | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<ConnectionStatus>('idle');
-  const [waveformData, setWaveformData] = useState<number[]>(Array(60).fill(0));
+  const [micMuted, setMicMuted] = useState(false);
+  const [llmIsSpeaking, setIsLlmSpeaking] = useState(false);
+
+  console.log('llm speaking: ', llmIsSpeaking);
+
+  // Toggle mute state and update local audio track
+  const toggleMute = () => {
+    setMicMuted(prev => {
+      const newMuted = !prev;
+      const stream = localStreamRef.current;
+      if (stream) {
+        stream.getAudioTracks().forEach(track => {
+          track.enabled = !newMuted;
+        });
+      }
+      return newMuted;
+    });
+  };
 
   useEffect(() => {
     return () => {
       dataChannel.current?.close();
       peerConnection.current?.close();
-      localStream.current?.getTracks().forEach(track => track.stop());
+      localStreamRef.current?.getTracks().forEach(track => track.stop());
       audioContextRef.current?.close();
       dataChannel.current = null;
       peerConnection.current = null;
-      localStream.current = null;
+      localStreamRef.current = null;
       audioContextRef.current = null;
     };
   }, []);
@@ -60,24 +77,22 @@ function App() {
 
     dataChannel.current?.close();
     peerConnection.current?.close();
-    localStream.current?.getTracks().forEach(track => track.stop());
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
     dataChannel.current = null;
     peerConnection.current = null;
-    localStream.current = null;
+    localStreamRef.current = null;
 
     setStatus('disconnected');
-    setWaveformData(Array(60).fill(0));
+    setMicMuted(false);
+    setIsLlmSpeaking(false);
   };
 
   const startVoiceChat = async () => {
     try {
-      if (peerConnection.current) {
-        return;
-      }
+      if (peerConnection.current) return;
 
       setStatus('connecting');
 
-      // Create a peer connection
       const pc = new RTCPeerConnection();
       peerConnection.current = pc;
 
@@ -94,112 +109,114 @@ function App() {
         }
       };
 
-      // Set up to play remote audio from the model
-      if (audioElement.current) {
-        audioElement.current.autoplay = true;
-      }
+      // Prepare audio element for remote playback
+      if (audioElement.current) audioElement.current.autoplay = true;
+
+      // Get local microphone
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      localStreamRef.current = localStream;
+      pc.addTrack(localStream.getTracks()[0]);
+
+      // Set up DataChannel
+      const dc = pc.createDataChannel('oai-events');
+      dataChannel.current = dc;
+      dc.onopen = () => {
+        setStatus('connected');
+
+        dc.send(
+          JSON.stringify({
+            type: 'response.create',
+            response: {
+              metadata: {
+                response_purpose: 'greeting',
+              },
+              instructions: `Greet the parent (Maria) by name and ask which student (${JSON.stringify(CHILDREN, null, 2)}) will be absent.
+              
+              When mentioning students, be sure to be personable and mention them all by first name. If the parent mentions a class or period, reference the schedule above to provide details like teacher name and class time.
+
+              Do NOT assume language. Always start in English and let the user update it if need be.
+              `,
+            },
+          }),
+        );
+      };
+      dc.onclose = () => setStatus('disconnected');
+      dc.onmessage = e => {
+        const serverEvent = JSON.parse(e.data);
+        if (serverEvent.type === 'response.done') {
+          const newTranscript =
+            serverEvent.response.output[0]?.content[0].transcript || null;
+          console.log('transcript: ', newTranscript);
+        }
+      };
+
       pc.ontrack = e => {
         const remoteStream = e.streams[0];
+        if (!audioElement.current) return;
 
-        if (audioElement.current) {
-          audioElement.current.srcObject = remoteStream;
-        }
+        audioElement.current.srcObject = remoteStream;
+        audioElement.current.autoplay = true;
 
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
-          audioContextRef.current = null;
-        }
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current);
-          animationRef.current = null;
-        }
-
+        // Create AudioContext for LLM output
         const audioContext = new AudioContext();
         audioContextRef.current = audioContext;
 
         const source = audioContext.createMediaStreamSource(remoteStream);
+
         const analyser = audioContext.createAnalyser();
-
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.85;
-
+        analyser.fftSize = 1024; // higher = smoother
         source.connect(analyser);
-        analyserRef.current = analyser;
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-        const BAR_COUNT = 60;
+        // ---- speaking detection state ----
+        let lastSpeakingTime = 0;
+        let smoothedRms = 0;
 
-        const update = () => {
-          analyser.getByteFrequencyData(dataArray);
+        const SPEAKING_THRESHOLD = 0.01; // adjust if needed
+        const SPEAKING_DECAY = 750; // ms before considering 'not speaking'
+        const SMOOTHING = 0.2; // exponential smoothing
 
-          const bars: number[] = [];
+        const detectSpeaking = () => {
+          analyser.getByteTimeDomainData(dataArray);
 
-          const chunkSize = Math.floor(bufferLength / (BAR_COUNT / 2));
+          // compute RMS
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const normalized = (dataArray[i] - 128) / 128;
+            sum += normalized * normalized;
+          }
+          const rms = Math.sqrt(sum / dataArray.length);
 
-          for (let i = 0; i < BAR_COUNT / 2; i++) {
-            let sum = 0;
+          // exponential smoothing
+          smoothedRms = SMOOTHING * rms + (1 - SMOOTHING) * smoothedRms;
 
-            for (let j = 0; j < chunkSize; j++) {
-              sum += dataArray[i * chunkSize + j];
-            }
+          const now = performance.now();
 
-            const average = sum / chunkSize;
-            const normalized = Math.min((average / 255) * 1.5, 1);
-
-            bars.push(normalized);
+          // speaking logic with hysteresis
+          if (smoothedRms > SPEAKING_THRESHOLD) {
+            lastSpeakingTime = now;
+            setIsLlmSpeaking(true);
+          } else if (now - lastSpeakingTime > SPEAKING_DECAY) {
+            setIsLlmSpeaking(false);
           }
 
-          // Mirror it
-          const mirrored = [...bars.slice().reverse(), ...bars];
-
-          setWaveformData(mirrored);
-
-          animationRef.current = requestAnimationFrame(update);
+          animationRef.current = requestAnimationFrame(detectSpeaking);
         };
 
-        update();
+        detectSpeaking();
       };
 
-      // Add local audio track for microphone input in the browser
-      const ms = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-      localStream.current = ms;
-      pc.addTrack(ms.getTracks()[0]);
-
-      // Set up data channel for sending and receiving events
-      const dc = pc.createDataChannel('oai-events');
-      dataChannel.current = dc;
-      dc.onerror = e => console.error('Data channel error:', e);
-      dc.onopen = () => {
-        setStatus('connected');
-      };
-      dc.onclose = () => {
-        setStatus('disconnected');
-      };
-      dc.onmessage = e => {
-        const serverEvent = JSON.parse(e.data);
-
-        if (serverEvent.type === 'response.done') {
-          console.log(serverEvent.response.output[0]);
-        }
-        if (serverEvent.type === 'response.output_audio.delta') {
-          console.log('delta hit: ', serverEvent);
-        }
-      };
-
-      // Start the session using the Session Description Protocol (SDP)
+      // Start the WebRTC session
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
       const sdpResponse = await fetch('/session', {
         method: 'POST',
         body: offer.sdp,
-        headers: {
-          'Content-Type': 'application/sdp',
-        },
+        headers: { 'Content-Type': 'application/sdp' },
       });
 
       const answer = {
@@ -207,10 +224,9 @@ function App() {
         sdp: await sdpResponse.text(),
       };
       await pc.setRemoteDescription(answer);
-    } catch (error) {
-      console.error('Error starting voice chat:', error);
+    } catch (err) {
+      console.error('Error starting voice chat:', err);
       stopVoiceChat();
-      return;
     }
   };
 
@@ -218,9 +234,7 @@ function App() {
     <>
       <audio ref={audioElement} className='hidden' />
       <Navbar />
-      <span className='mx-auto text-sm mt-4 text-center block font-medium'>
-        An AI-Powered Demo
-      </span>
+
       <h1 className='text-2xl font-bold text-center mt-6'>
         School Absence System
       </h1>
@@ -230,54 +244,73 @@ function App() {
       </p>
 
       <div className='max-w-lg mx-auto mt-12 mb-4 px-4'>
-        <Card>
-          <CardHeader className='px-4'>
-            <CardTitle>Report a Student Absence</CardTitle>
-            <CardDescription>
-              Give us the details and we'll take care of the rest.
-            </CardDescription>
-          </CardHeader>
+        <Card className='py-4'>
           <CardContent className='px-4'>
-            <LiveWaveform
-              active={status === 'connected'}
-              mode='static'
-              fadeEdges
-            />
-            <Waveform
-              data={waveformData}
-              height={100}
-              barWidth={3}
-              barGap={2}
-              fadeEdges
-            />
+            {status !== 'connected' ? (
+              <Empty className='p-0 md:p-0'>
+                <EmptyHeader>
+                  <EmptyMedia variant='default' className='w-12 h-12'>
+                    <Orb colors={['#e60076', '']} />
+                  </EmptyMedia>
+                  <EmptyTitle>Absence Reporting</EmptyTitle>
+                  <EmptyDescription>
+                    Just start a voice chat and provide the details of the
+                    absence, and we'll handle the rest.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button
+                    size={'sm'}
+                    className='active:scale-95 transition-transform'
+                    onClick={startVoiceChat}
+                    disabled={status === 'connecting'}
+                  >
+                    <AudioLines />
+                    {status === 'connecting'
+                      ? 'Connecting...'
+                      : 'Start voice chat'}
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            ) : (
+              <div className='w-full'>
+                <Orb
+                  colors={
+                    micMuted
+                      ? ['#e7000b', '']
+                      : llmIsSpeaking
+                        ? ['#e60076', '']
+                        : ['#4ade80', '']
+                  }
+                />
+              </div>
+            )}
           </CardContent>
-          <CardFooter className='flex flex-col gap-4 px-4'>
-            <div className='ml-auto flex gap-2'>
-              {status === 'connected' ? (
+          {status === 'connected' && (
+            <CardFooter className='flex items-center justify-between gap-4 px-4'>
+              <div className='flex items-center gap-2'>
                 <Button
-                  size={'sm'}
-                  variant='destructive'
+                  variant={micMuted ? 'secondary' : 'outline'}
+                  size={'icon-sm'}
                   className='active:scale-95 transition-transform'
-                  onClick={stopVoiceChat}
+                  aria-pressed={micMuted}
+                  onClick={toggleMute}
+                  title={micMuted ? 'Unmute mic' : 'Mute mic'}
                 >
-                  <PhoneOff />
-                  End call
+                  {micMuted ? <MicOff className='text-red-500' /> : <Mic />}
                 </Button>
-              ) : (
-                <Button
-                  size={'sm'}
-                  className='active:scale-95 transition-transform'
-                  onClick={startVoiceChat}
-                  disabled={status === 'connecting'}
-                >
-                  <AudioLines />
-                  {status === 'connecting'
-                    ? 'Connecting...'
-                    : 'Start voice chat'}
-                </Button>
-              )}
-            </div>
-          </CardFooter>
+              </div>
+              <Button
+                size={'sm'}
+                variant='destructive'
+                className='active:scale-95 transition-transform'
+                onClick={stopVoiceChat}
+              >
+                <PhoneOff />
+                End call
+              </Button>
+            </CardFooter>
+          )}
         </Card>
       </div>
     </>

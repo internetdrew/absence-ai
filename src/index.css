@@ -2,6 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -119,10 +120,10 @@
   * {
     @apply border-border outline-ring/50;
     @apply border-border outline-ring/50;
-    font-family: 'Geist Variable', sans-serif;
   }
   body {
     @apply bg-background text-foreground;
     @apply bg-background text-foreground;
+    font-family: 'Geist Variable', sans-serif;
   }
 }
