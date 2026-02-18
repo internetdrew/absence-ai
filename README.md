@@ -2,7 +2,7 @@
 
 ## The Problem
 
-Reporting a single student absence often triggers a chain of manual processes — notifying teachers, updating attendance systems, logging details — which can take up to 15 minutes of staff time per student. For schools managing hundreds of students, this adds up quickly and pulls staff away from instructional tasks.
+Reporting a single student absence often triggers a chain of manual processes — notifying teachers, updating attendance systems, logging details — which can take up to 15 minutes of staff time per student. For schools managing hundreds of students, this adds up quickly and pulls staff away from more pressing tasks.
 
 ## Solution
 
