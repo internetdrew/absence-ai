@@ -29,8 +29,6 @@ function App() {
   const [micMuted, setMicMuted] = useState(false);
   const [llmIsSpeaking, setIsLlmSpeaking] = useState(false);
 
-  console.log('llm speaking: ', llmIsSpeaking);
-
   // Toggle mute state and update local audio track
   const toggleMute = () => {
     setMicMuted(prev => {
@@ -146,9 +144,9 @@ function App() {
       dc.onmessage = e => {
         const serverEvent = JSON.parse(e.data);
         if (serverEvent.type === 'response.done') {
-          const newTranscript =
-            serverEvent.response.output[0]?.content[0].transcript || null;
-          console.log('transcript: ', newTranscript);
+          console.log(
+            serverEvent.response.output[0]?.content[0].transcript || null,
+          );
         }
       };
 
