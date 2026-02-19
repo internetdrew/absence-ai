@@ -34,11 +34,13 @@ Absence AI demonstrates how a Realtime LLM voice agent can handle the entire abs
    npm install
 ```
 
-3. Add your OpenAI API key to `.env.local`:
+3. Create your local environment file:
 
+```bash
+   cp .env.example .env.local
 ```
-   OPENAI_API_KEY=your_key_here
-```
+
+Then edit `.env.local` and add your OpenAI API key.
 
 4. Start the development server:
 
