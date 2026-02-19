@@ -1,5 +1,9 @@
 # Absence AI
 
+<p align="center">
+   <img src="public/screenshot.png" alt="Absence AI Screenshot" width="600" />
+</p>
+
 ## The Problem
 
 Reporting a single student absence often triggers a chain of manual processes — notifying teachers, updating attendance records, alerting the nurse's office — which can take up to 15 minutes of staff time per student. For schools managing hundreds of students, this adds up quickly and pulls staff away from more pressing tasks.
