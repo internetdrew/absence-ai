@@ -1,8 +1,10 @@
 # Absence AI
 
-<p align="center">
+<!-- <p align="center">
    <img src="public/screenshot.png" alt="Absence AI Screenshot" width="600" />
-</p>
+</p> -->
+
+![Absence AI Screenshot](public/screenshot.png)
 
 ## The Problem
 
