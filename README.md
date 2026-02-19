@@ -6,11 +6,11 @@
 
 ![Absence AI Screenshot](public/screenshot.png)
 
-## The Problem
+## The Issue
 
 Reporting a single student absence often triggers a chain of manual processes — notifying teachers, updating attendance records, alerting the nurse's office — which can take up to 15 minutes of staff time per student. For schools managing hundreds of students, this adds up quickly and pulls staff away from more pressing tasks.
 
-## Solution
+## This Solution
 
 Absence AI demonstrates how a Realtime LLM voice agent can handle the entire absence reporting workflow automatically. Parents call in, speak naturally, and the system collects, confirms, and processes the absence — reducing staff handling time to virtually zero.
 
