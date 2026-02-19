@@ -28,6 +28,7 @@ function App() {
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [micMuted, setMicMuted] = useState(false);
   const [llmIsSpeaking, setIsLlmSpeaking] = useState(false);
+  const [assistantMessage, setAssistantMessage] = useState<string | null>(null);
 
   // Toggle mute state and update local audio track
   const toggleMute = () => {
@@ -83,6 +84,7 @@ function App() {
     setStatus('disconnected');
     setMicMuted(false);
     setIsLlmSpeaking(false);
+    setAssistantMessage(null);
   };
 
   const startVoiceChat = async () => {
@@ -145,7 +147,11 @@ function App() {
         const serverEvent = JSON.parse(e.data);
         if (serverEvent.type === 'response.done') {
           console.log(
-            serverEvent.response.output[0]?.content[0].transcript || null,
+            serverEvent.response?.output[0]?.content[0]?.transcript || null,
+          );
+
+          setAssistantMessage(
+            serverEvent.response?.output[0]?.content[0]?.transcript || null,
           );
         }
       };
@@ -243,7 +249,7 @@ function App() {
 
       <div className='max-w-lg mx-auto mt-12 mb-4 px-4'>
         <Card className='py-4'>
-          <CardContent className='px-4'>
+          <CardContent className='px-4 min-h-52'>
             {status !== 'connected' ? (
               <Empty className='p-0 md:p-0'>
                 <EmptyHeader>
@@ -280,7 +286,16 @@ function App() {
                         ? ['#155dfc', '']
                         : ['#4ade80', '']
                   }
+                  className='w-16 h-16'
                 />
+                {assistantMessage && (
+                  <div
+                    id='assistant-message'
+                    className='mt-4 p-4 bg-card rounded-md border border-muted-foreground/20 text-sm'
+                  >
+                    <p>{assistantMessage}</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
