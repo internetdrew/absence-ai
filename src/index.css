@@ -127,3 +127,7 @@
     font-family: 'Geist Variable', sans-serif;
   }
 }
+
+#assistant-message {
+  font-family: 'Geist Mono Variable', monospace;
+}

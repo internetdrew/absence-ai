@@ -50,7 +50,7 @@ const sessionConfig = JSON.stringify({
 The parent has the following students enrolled:
 ${JSON.stringify(CHILDREN, null, 2)}
 
-When reporting an absence, confirm the student name, date(s), and reason. If they mention a class or period, reference the schedule above.`,
+When reporting an absence, confirm the student name, relevant dates for the absence, and the reason. If they mention a class or period, reference the schedule above.`,
 });
 
 // An endpoint which creates a Realtime API session.
