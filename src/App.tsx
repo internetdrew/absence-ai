@@ -16,6 +16,18 @@ import { CHILDREN } from './constants';
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
+type Absence = {
+  student_name: string;
+  date: string;
+  reason: string;
+  nurse_notes?: {
+    has_fever?: boolean;
+    has_vomiting?: boolean;
+    tested_positive_for?: string;
+    other_symptoms?: string;
+  };
+};
+
 function App() {
   const audioElement = useRef<HTMLAudioElement | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
@@ -24,11 +36,13 @@ function App() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
+  const pendingStopRef = useRef(false);
 
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [micMuted, setMicMuted] = useState(false);
   const [llmIsSpeaking, setIsLlmSpeaking] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(null);
+  const [absences, setAbsences] = useState<Absence[]>([]);
 
   // Toggle mute state and update local audio track
   const toggleMute = () => {
@@ -116,8 +130,9 @@ function App() {
       const localStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
+
       localStreamRef.current = localStream;
-      pc.addTrack(localStream.getTracks()[0]);
+      pc.addTrack(localStream.getTracks()[0], localStream);
 
       // Set up DataChannel
       const dc = pc.createDataChannel('oai-events');
@@ -133,7 +148,7 @@ function App() {
                 response_purpose: 'greeting',
               },
               instructions: `Greet the parent (Maria) by name and ask which student (${JSON.stringify(CHILDREN, null, 2)}) will be absent.
-              
+
               When mentioning students, be sure to be personable and mention them all by first name. If the parent mentions a class or period, reference the schedule above to provide details like teacher name and class time.
 
               Do NOT assume language. Always start in English and let the user update it if need be.
@@ -145,13 +160,58 @@ function App() {
       dc.onclose = () => setStatus('disconnected');
       dc.onmessage = e => {
         const serverEvent = JSON.parse(e.data);
+
         if (serverEvent.type === 'response.done') {
-          console.log(
-            serverEvent.response?.output[0]?.content[0]?.transcript || null,
+          setAssistantMessage(
+            serverEvent.response?.output[0]?.content[0]?.transcript ?? null,
+          );
+        }
+        if (
+          serverEvent.type === 'response.function_call_arguments.done' &&
+          serverEvent.name === 'submit_absence'
+        ) {
+          const { absences } = JSON.parse(serverEvent.arguments) as {
+            absences: Absence[];
+          };
+
+          setAbsences(absences);
+          pendingStopRef.current = true;
+
+          dc.send(
+            JSON.stringify({
+              type: 'session.update',
+              session: {
+                audio: {
+                  input: {
+                    turn_detection: null,
+                  },
+                },
+              },
+            }),
           );
 
-          setAssistantMessage(
-            serverEvent.response?.output[0]?.content[0]?.transcript || null,
+          dc.send(
+            JSON.stringify({
+              type: 'conversation.item.create',
+              item: {
+                type: 'function_call_output',
+                call_id: serverEvent.call_id,
+                output: JSON.stringify({ success: true }),
+              },
+            }),
+          );
+
+          dc.send(
+            JSON.stringify({
+              type: 'response.create',
+              response: {
+                metadata: {
+                  response_purpose: 'saying goodbye',
+                },
+                instructions: `Thank the parent for providing the absence details and say goodbye. Do not mention the specific absence details in this message. Just be warm and personable in your farewell.
+              `,
+              },
+            }),
           );
         }
       };
@@ -163,7 +223,7 @@ function App() {
         audioElement.current.srcObject = remoteStream;
         audioElement.current.autoplay = true;
 
-        // Create AudioContext for LLM output
+        // AudioContext for LLM output
         const audioContext = new AudioContext();
         audioContextRef.current = audioContext;
 
@@ -205,6 +265,11 @@ function App() {
             setIsLlmSpeaking(true);
           } else if (now - lastSpeakingTime > SPEAKING_DECAY) {
             setIsLlmSpeaking(false);
+
+            if (pendingStopRef.current) {
+              pendingStopRef.current = false;
+              stopVoiceChat();
+            }
           }
 
           animationRef.current = requestAnimationFrame(detectSpeaking);
