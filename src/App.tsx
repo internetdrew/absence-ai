@@ -44,6 +44,8 @@ function App() {
   const [assistantMessage, setAssistantMessage] = useState<string | null>(null);
   const [absences, setAbsences] = useState<Absence[]>([]);
 
+  console.log('Current absences:', absences);
+
   // Toggle mute state and update local audio track
   const toggleMute = () => {
     setMicMuted(prev => {
@@ -160,6 +162,7 @@ function App() {
       dc.onclose = () => setStatus('disconnected');
       dc.onmessage = e => {
         const serverEvent = JSON.parse(e.data);
+        console.log('Received server event:', serverEvent);
 
         if (serverEvent.type === 'response.done') {
           setAssistantMessage(
@@ -170,12 +173,26 @@ function App() {
           serverEvent.type === 'response.function_call_arguments.done' &&
           serverEvent.name === 'submit_absence'
         ) {
-          const { absences } = JSON.parse(serverEvent.arguments) as {
-            absences: Absence[];
-          };
+          try {
+            const { absences } = JSON.parse(serverEvent.arguments) as {
+              absences: Absence[];
+            };
+            setAbsences(absences);
+          } catch (err) {
+            console.error('Failed to parse absence arguments:', err);
+            return;
+          }
 
-          setAbsences(absences);
-          pendingStopRef.current = true;
+          dc.send(
+            JSON.stringify({
+              type: 'conversation.item.create',
+              item: {
+                type: 'function_call_output',
+                call_id: serverEvent.call_id,
+                output: JSON.stringify({ success: true }),
+              },
+            }),
+          );
 
           dc.send(
             JSON.stringify({
@@ -192,17 +209,6 @@ function App() {
 
           dc.send(
             JSON.stringify({
-              type: 'conversation.item.create',
-              item: {
-                type: 'function_call_output',
-                call_id: serverEvent.call_id,
-                output: JSON.stringify({ success: true }),
-              },
-            }),
-          );
-
-          dc.send(
-            JSON.stringify({
               type: 'response.create',
               response: {
                 metadata: {
@@ -213,6 +219,8 @@ function App() {
               },
             }),
           );
+
+          pendingStopRef.current = true;
         }
       };
 
