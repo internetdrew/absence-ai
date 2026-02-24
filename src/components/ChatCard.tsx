@@ -29,6 +29,7 @@ const ChatCard = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const pendingStopRef = useRef(false);
+  const pendingAbsencesRef = useRef<Absence[] | null>(null);
 
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [micMuted, setMicMuted] = useState(false);
@@ -165,7 +166,7 @@ const ChatCard = ({
             const { absences } = JSON.parse(serverEvent.arguments) as {
               absences: Absence[];
             };
-            setAbsences(absences);
+            pendingAbsencesRef.current = absences;
           } catch (err) {
             console.error('Failed to parse absence arguments:', err);
             return;
@@ -264,6 +265,11 @@ const ChatCard = ({
 
             if (pendingStopRef.current) {
               pendingStopRef.current = false;
+              // Set absences after LLM finishes speaking
+              if (pendingAbsencesRef.current) {
+                setAbsences(pendingAbsencesRef.current);
+                pendingAbsencesRef.current = null;
+              }
               stopVoiceChat();
             }
           }
