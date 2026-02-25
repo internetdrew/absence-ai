@@ -28,15 +28,20 @@ const Navbar = () => {
               <DrawerDescription>
                 This demo is built to demonstrate how agentic systems can be
                 used to save human time in multi-step processes. In this demo,
-                you can play the role of a parent putting in for a day off for
-                one or more of their children.
+                you can play the role of a parent (who is logged into their
+                account) putting in for a day off for one or more of their
+                children.
                 <br />
                 <br />
                 The tasks that follow a call like this could possibly take a
-                staff member up to around 15 minutes to complete, but with the
-                help of LLMs, we can get it done in under a minute. This is just
-                one example of how AI can be used to save time and reduce
-                friction in our daily lives.
+                staff member up to around 5 minutes to complete, per absence,
+                but with the help of LLMs, we can automate this process and
+                decide where we put a human in the process (perhaps for final
+                approval or check).
+                <br />
+                <br />
+                This is just one example of how AI can be used to save time and
+                reduce friction in our daily lives.
               </DrawerDescription>
             </DrawerHeader>
             <div className='p-4'>
