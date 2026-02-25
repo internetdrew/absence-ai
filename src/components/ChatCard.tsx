@@ -22,6 +22,7 @@ const ChatCard = ({
 }: {
   setAbsences: React.Dispatch<React.SetStateAction<Absence[]>>;
 }) => {
+  // --- WebRTC and audio refs ---
   const audioElement = useRef<HTMLAudioElement | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const dataChannel = useRef<RTCDataChannel | null>(null);
@@ -29,14 +30,16 @@ const ChatCard = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
-  const pendingStopRef = useRef(false);
-  const pendingAbsencesRef = useRef<Absence[] | null>(null);
+  // Used to trigger stopping the chat after assistant finishes speaking
+  const shouldStopAfterSpeakingRef = useRef(false);
+  // Holds absences to set after assistant finishes speaking
+  const pendingAbsencesToSetRef = useRef<Absence[] | null>(null);
 
   const [status, setStatus] = useState<ConnectionStatus>('idle');
-  const [micMuted, setMicMuted] = useState(false);
-  const [llmIsSpeaking, setIsLlmSpeaking] = useState(false);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [assistantIsSpeaking, setAssistantIsSpeaking] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(null);
-  const [triggerMockApi, setTriggerMockApi] = useState(false);
+  const [showAbsenceProcessing, setShowAbsenceProcessing] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -52,8 +55,9 @@ const ChatCard = ({
   }, []);
 
   // Toggle mute state and update local audio track
+  // Toggle mute state and update local audio track
   const toggleMute = () => {
-    setMicMuted(prev => {
+    setIsMicMuted(prev => {
       const newMuted = !prev;
       const stream = localStreamRef.current;
       if (stream) {
@@ -89,8 +93,8 @@ const ChatCard = ({
     localStreamRef.current = null;
 
     setStatus('disconnected');
-    setMicMuted(false);
-    setIsLlmSpeaking(false);
+    setIsMicMuted(false);
+    setAssistantIsSpeaking(false);
     setAssistantMessage(null);
   };
 
@@ -169,7 +173,7 @@ const ChatCard = ({
             const { absences } = JSON.parse(serverEvent.arguments) as {
               absences: Absence[];
             };
-            pendingAbsencesRef.current = absences;
+            pendingAbsencesToSetRef.current = absences;
           } catch (err) {
             console.error('Failed to parse absence arguments:', err);
             return;
@@ -212,8 +216,8 @@ const ChatCard = ({
             }),
           );
 
-          pendingStopRef.current = true;
-          setTriggerMockApi(true);
+          shouldStopAfterSpeakingRef.current = true;
+          setShowAbsenceProcessing(true);
         }
       };
 
@@ -237,6 +241,7 @@ const ChatCard = ({
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
         // ---- speaking detection state ----
+        // --- Speaking detection logic ---
         let lastSpeakingTime = 0;
         let smoothedRms = 0;
 
@@ -263,16 +268,16 @@ const ChatCard = ({
           // speaking logic with hysteresis
           if (smoothedRms > SPEAKING_THRESHOLD) {
             lastSpeakingTime = now;
-            setIsLlmSpeaking(true);
+            setAssistantIsSpeaking(true);
           } else if (now - lastSpeakingTime > SPEAKING_DECAY) {
-            setIsLlmSpeaking(false);
+            setAssistantIsSpeaking(false);
 
-            if (pendingStopRef.current) {
-              pendingStopRef.current = false;
-              // Set absences after LLM finishes speaking
-              if (pendingAbsencesRef.current) {
-                setAbsences(pendingAbsencesRef.current);
-                pendingAbsencesRef.current = null;
+            if (shouldStopAfterSpeakingRef.current) {
+              shouldStopAfterSpeakingRef.current = false;
+              // Set absences after assistant finishes speaking
+              if (pendingAbsencesToSetRef.current) {
+                setAbsences(pendingAbsencesToSetRef.current);
+                pendingAbsencesToSetRef.current = null;
               }
               stopVoiceChat();
             }
@@ -341,9 +346,9 @@ const ChatCard = ({
             <div className='w-full'>
               <Orb
                 colors={
-                  micMuted
+                  isMicMuted
                     ? ['#e7000b', '']
-                    : llmIsSpeaking
+                    : assistantIsSpeaking
                       ? ['#155dfc', '']
                       : ['#4ade80', '']
                 }
@@ -357,7 +362,7 @@ const ChatCard = ({
                   <p>{assistantMessage}</p>
                 </div>
               )}
-              {triggerMockApi && <MockApiShimmer />}
+              {showAbsenceProcessing && <MockApiShimmer />}
             </div>
           )}
         </CardContent>
@@ -365,14 +370,14 @@ const ChatCard = ({
           <CardFooter className='flex items-center justify-between gap-4 px-4'>
             <div className='flex items-center gap-2'>
               <Button
-                variant={micMuted ? 'secondary' : 'outline'}
+                variant={isMicMuted ? 'secondary' : 'outline'}
                 size={'icon-sm'}
                 className='active:scale-95 transition-transform'
-                aria-pressed={micMuted}
+                aria-pressed={isMicMuted}
                 onClick={toggleMute}
-                title={micMuted ? 'Unmute mic' : 'Mute mic'}
+                title={isMicMuted ? 'Unmute mic' : 'Mute mic'}
               >
-                {micMuted ? <MicOff className='text-red-500' /> : <Mic />}
+                {isMicMuted ? <MicOff className='text-red-500' /> : <Mic />}
               </Button>
             </div>
             <Button
