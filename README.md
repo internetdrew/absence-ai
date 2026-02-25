@@ -25,7 +25,10 @@ Absence AI demonstrates how a Realtime LLM voice agent can handle the entire abs
 
 ## Screenshots
 
-![Absence AI Screenshot](public/screenshot.png)
+![Absence AI Home Screen](public/screenshot.png)
+![Absence AI Home Screen](public/screenshot-1.png)
+![Absence AI Home Screen](public/screenshot-2.png)
+![Absence AI Home Screen](public/screenshot-3.png)
 
 ## Quick Start
 
