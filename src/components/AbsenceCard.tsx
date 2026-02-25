@@ -6,7 +6,7 @@ import {
   User,
   Watch,
 } from 'lucide-react';
-import type { Absence } from '@/App';
+import type { Absence } from '@/types';
 import { format } from 'date-fns';
 
 const absenceTypeMapping: Record<Absence['type'], string> = {

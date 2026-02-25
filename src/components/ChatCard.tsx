@@ -12,7 +12,8 @@ import { AudioLines, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { Orb } from '@/components/ui/orb';
 import { useEffect, useRef, useState } from 'react';
 import { CHILDREN } from '@/constants';
-import type { Absence } from '@/App';
+import MockApiShimmer from './MockApiShimmer';
+import type { Absence } from '@/types';
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -35,6 +36,7 @@ const ChatCard = ({
   const [micMuted, setMicMuted] = useState(false);
   const [llmIsSpeaking, setIsLlmSpeaking] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(null);
+  const [triggerMockApi, setTriggerMockApi] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -158,6 +160,7 @@ const ChatCard = ({
             serverEvent.response?.output[0]?.content[0]?.transcript ?? null,
           );
         }
+
         if (
           serverEvent.type === 'response.function_call_arguments.done' &&
           serverEvent.name === 'submit_absence'
@@ -210,6 +213,7 @@ const ChatCard = ({
           );
 
           pendingStopRef.current = true;
+          setTriggerMockApi(true);
         }
       };
 
@@ -353,6 +357,7 @@ const ChatCard = ({
                   <p>{assistantMessage}</p>
                 </div>
               )}
+              {triggerMockApi && <MockApiShimmer />}
             </div>
           )}
         </CardContent>
