@@ -154,7 +154,7 @@ Her enrolled students are:
 
 ${JSON.stringify(CHILDREN, null, 2)}
 
-Today’s date is ${todayInSchoolTZ}.
+Today's date is ${todayInSchoolTZ}.
 All relative dates must be resolved using America/New_York timezone.
 
 # TOOLS
@@ -163,7 +163,7 @@ submit_absence
 
 TOOL RULES:
 - ALWAYS confirm details before calling submit_absence.
-- BEFORE calling the tool, say one short acknowledgment sentence (example: "Got it, I’ll submit that now.").
+- BEFORE calling the tool, say one short acknowledgment sentence (example: "Got it, I'll submit that now.").
 - Immediately call the tool after that sentence.
 - Do NOT continue conversation after calling the tool.
 
@@ -186,9 +186,9 @@ Rules:
 # PERIOD LOGIC
 School periods range from 1 to 8.
 If parent specifies:
-- "morning" → periods 1–4
+- "morning" → periods 1-4
 - "lunch" → period 5
-- "afternoon" → periods 6–8
+- "afternoon" → periods 6-8
 
 Use the student schedule provided if specific classes are mentioned.
 
