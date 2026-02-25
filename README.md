@@ -30,6 +30,13 @@ Absence AI demonstrates how a Realtime LLM voice agent can handle the entire abs
 ![Absence AI Home Screen](public/screenshot-2.png)
 ![Absence AI Home Screen](public/screenshot-3.png)
 
+## Prerequisites
+
+Before you begin, make sure you have the following:
+
+- **Node.js** (v18 or newer) and **npm** installed. [Download Node.js](https://nodejs.org/)
+- An **OpenAI API key** ([get one here](https://platform.openai.com/account/api-keys))
+
 ## Quick Start
 
 1. Clone the repo:
